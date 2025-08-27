@@ -1,0 +1,344 @@
+---
+title: "Introduction aux statistiques"
+author: "Fabien Haury"
+date: '`r Sys.Date()`'
+output:
+  prettydoc::html_pretty:
+    theme: cayman
+    highlight: github
+    keep_md: TRUE
+    df_print: tibble
+    toc: true
+    toc_depth: 2
+    number_sections: true
+    fig_width: 10
+    fig_height: 9
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      fig.align = "center")
+```
+
+# Librairies
+
+```{r library, message=FALSE, warning=FALSE}
+
+library(plyr)
+library(tidyverse)
+library(lubridate)
+library(naniar)
+library(scales)
+library(ggthemes)
+library(vcd)
+library(flextable)
+library(crosstable)
+library(finalfit)
+library(summarytools)
+library(rstatix)
+```
+
+# Import et préparation des données
+
+## Import des données
+
+```{r import données, message=FALSE, warning=FALSE}
+
+countries.HDI <- read_csv("jeu_de_donnees/countries.HDI.CSV", 
+                          locale = locale(encoding = "ISO-8859-1"),
+                          na = "NA")
+
+effec1_quest_compil <- read_csv("jeu_de_donnees/effec1.quest.compil.csv", 
+                                locale = locale(encoding = "ISO-8859-1"), 
+                                na = "NA")
+
+effec2_quest_compil <- read_csv("jeu_de_donnees/effec2.quest.compil.csv", 
+                                locale = locale(encoding = "ISO-8859-1"), 
+                                na = "NA")
+
+effec3_quest_compil <- read_csv("jeu_de_donnees/effec3.quest.compil.csv", 
+                                locale = locale(encoding = "ISO-8859-1"), 
+                                na = "NA")
+
+usages_effec1 <- read_csv("jeu_de_donnees/usages.effec1.csv", 
+                          na = "NA")
+
+usages_effec2 <- read_csv("jeu_de_donnees/usages.effec2.csv", 
+                          na = "NA")
+
+usages_effec3 <- read_csv("jeu_de_donnees/usages.effec3.csv", 
+                          na = "NA")
+```
+
+## Création des variables intermédiaires
+
+```{r création des variables intermédiaires, message=FALSE, warning=FALSE}
+
+quizz <- c("Quizz.1.bin", "Quizz.2.bin", "Quizz.3.bin", "Quizz.4.bin", 
+           "Quizz.5.bin")
+
+video <- c("S1.L1", "S1.L2", "S1.L3", "S1.L4", "S1.L5", "S1.L6",
+           "S2.L1", "S2.L2", "S2.L3", "S2.L4", "S2.L5", "S2.L6",
+           "S3.L1.1","S3.L1.2", "S3.L2", "S3.L3", "S3.L4", "S3.L5",
+           "S4.L1.1","S4.L1.2", "S4.L2", "S4.L3", "S4.L4", "S4.L5",
+           "S5.L1.1","S4.L1.2", "S5.L2", "S5.L3", "S5.L4", "S5.L5")
+
+colonne_cible <- c("Student_ID", "Gender", "HDI", "Total_video", "Total_quizz", "Statut", 
+                   "Iteration", "Exam.bin", "HDI_count")
+```
+
+## Préparation des données
+
+```{r préparation données, message=FALSE, warning=FALSE}
+
+theme_set(theme_stata(base_family = "serif"))
+theme_update(panel.grid.major = element_blank(),
+             panel.background = element_rect(fill = "#CFCFCF"),
+             axis.title = element_text(size = 15))
+
+### Catégories apprenants
+usages_effec1 <- usages_effec1 %>% 
+  mutate(Statut = case_when(Exam.bin == 1 ~ "Completer",
+                            rowSums(usages_effec1[, quizz]) >= 1 & Assignment.bin == 1 &
+                              Exam.bin == 0  ~ "Disengaging learners",
+                            rowSums(usages_effec1[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec1[, video]) >= 6  ~ "Auditing learner",
+                            rowSums(usages_effec1[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec1[, video]) < 6  ~ "Bystanders"))
+
+usages_effec2 <- usages_effec2 %>% 
+  mutate(Statut = case_when(Exam.bin == 1 ~ "Completer",
+                            rowSums(usages_effec2[, quizz]) >= 1 & Assignment.bin == 1 &
+                              Exam.bin == 0  ~ "Disengaging learners",
+                            rowSums(usages_effec2[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec2[, video]) >= 6  ~ "Auditing learner",
+                            rowSums(usages_effec2[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec2[, video]) < 6  ~ "Bystanders"))
+
+usages_effec3 <- usages_effec3 %>% 
+  mutate(Statut = case_when(Exam.bin == 1 ~ "Completer",
+                            rowSums(usages_effec3[, quizz]) >= 1 & Assignment.bin == 1 &
+                              Exam.bin == 0  ~ "Disengaging learners",
+                            rowSums(usages_effec3[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec3[, video]) >= 6  ~ "Auditing learner",
+                            rowSums(usages_effec3[, quizz]) == 0 & Assignment.bin == 0 &
+                              rowSums(usages_effec3[, video]) < 6  ~ "Bystanders"))
+
+
+### Merge table
+merge_1 <- merge(effec1_quest_compil, usages_effec1, by = "Student_ID", all = TRUE) 
+merge_2 <- merge(effec2_quest_compil, usages_effec2, by = "Student_ID", all = TRUE)
+merge_3 <- merge(effec3_quest_compil, usages_effec3, by = "Student_ID", all = TRUE)
+
+merge_1 <- merge_1 %>% mutate(Iteration = 1)
+merge_2 <- merge_2 %>% mutate(Iteration = 2)
+merge_3 <- merge_3 %>% mutate(Iteration = 3)
+
+mooc_full_join <- rbind.fill(merge_1, merge_2, merge_3)
+
+mooc_filtered <- mooc_full_join %>%
+  group_by(Country_HDI) %>%
+  mutate(HDI_count = n(),
+         HDI = case_when(Country_HDI == "M" | Country_HDI == "H" ~ "I",
+                         Country_HDI == "B" ~ "B",
+                         Country_HDI == "TH" ~ "TH")) %>% 
+  ungroup()%>% 
+  mutate(Total_video = rowSums(mooc_full_join[, video]),
+         Total_quizz = rowSums(mooc_full_join[, quizz]),
+         Gender = case_when(Gender == "un homme" ~ "homme",
+                            Gender == "une femme" ~ "femme")) %>% 
+  subset(select = colonne_cible)
+
+
+### Suppression des dataframes/variables inutiles
+rm(effec1_quest_compil)
+rm(effec2_quest_compil)
+rm(effec3_quest_compil)
+rm(usages_effec1)
+rm(usages_effec2)
+rm(usages_effec3)
+rm(merge_1)
+rm(merge_2)
+rm(merge_3)
+rm(colonne_cible)
+rm(video)
+rm(quizz)
+```
+
+# Description du jeu de données
+
+```{r description jeu données, message=FALSE, warning=FALSE}
+
+mooc_cross_table <- crosstable(mooc_filtered, c(Statut, Iteration), 
+                               by = Iteration, total = "both", 
+                               percent_pattern = "{n} ({p_col})",
+                               showNA = "ifany")%>% 
+                    as_flextable()
+
+mooc_cross_table
+```
+
+# Chi2 et mosaic plot
+
+```{r création df hdi_gender, message=FALSE, warning=FALSE}
+
+mooc_hdi_gender <- mooc_filtered %>% select("Gender", "HDI")
+```
+
+## Chi2 test, V de Cramer
+
+```{r chi2 test et V de Cramer, message=FALSE, warning=FALSE}
+
+chisq <- chisq.test(table(mooc_hdi_gender$HDI, mooc_hdi_gender$Gender))
+
+chisq
+
+questionr::cramer.v(table(mooc_hdi_gender$Gender, mooc_hdi_gender$HDI))
+```
+
+## Mosaic plot
+
+```{r mosaic plot, message=FALSE, warning=FALSE}
+
+mosaic_observed <- mosaic(~ Gender + HDI,
+       data = mooc_hdi_gender,
+       shade = TRUE, legend = TRUE,
+       labeling=labeling_residuals)
+
+mosaic_observed
+
+
+mosaic_expected <- mosaic(~ Gender + HDI,
+       data = mooc_hdi_gender,
+       shade = TRUE, legend = TRUE, type = "expected",
+       labeling=labeling_residuals)
+
+mosaic_expected
+```
+
+# Modèle linéaire, tests non-paramétriques
+
+```{r création df mooc_selection, message=FALSE, warning=FALSE}
+
+mooc_selection <- mooc_filtered %>% select(Total_quizz, Total_video, HDI, Gender)
+```
+
+## Test de Student
+
+```{r, test de Student, message=FALSE, warning=FALSE}
+
+t.test(Total_video ~ Gender, mooc_selection)
+```
+
+## Test non-paramétrique
+
+```{r test nonn-paramétrique, message=FALSE, warning=FALSE}
+
+wilcox.test(Total_video ~ Gender, mooc_selection, correct = FALSE)
+mooc_selection %>% wilcox_effsize(Total_video ~ Gender)
+```
+
+## Test de corrélation de Pearson
+
+```{r corrélation Pearson, message=FALSE, warning=FALSE}
+
+cor.test( ~ Total_quizz + Total_video, mooc_selection, method = "pearson")
+```
+
+## Test de corrélation de Spearman
+
+```{r corrélation Spearman, message=FALSE, warning=FALSE}
+
+cor.test( ~ Total_quizz + Total_video, mooc_selection, method = "spearman")
+```
+
+## Modèle linéaire
+
+```{r modèle linéaire}
+
+model <- lm(Total_quizz ~ Total_video, mooc_selection)
+summary(model)
+```
+
+## Scatter plot
+
+```{r scatter plot Total_quiz ~ Total_video, message=FALSE, warning=FALSE}
+
+ggplot(mooc_selection, aes(Total_video, Total_quizz)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  scale_x_continuous(breaks = seq(0, 30, 3)) +
+  scale_y_continuous(breaks = seq(0, 5, 1)) +
+  labs(x = "\nNombre total de vidéos vues", 
+       y = "Nombre total de quiz effectués\n") +
+  theme(axis.text.y = element_text(angle = 0))+
+  expand_limits(x = 0, y = 0) +
+  coord_cartesian(expand = FALSE, clip = "off")
+```
+
+## ANOVA sans statistiques inférentielles
+
+```{r anova sans inférences, message=FALSE, warning=FALSE}
+
+mod_1 <- lm(Total_video ~ Gender + HDI, mooc_selection)
+anova(mod_1)
+summary(mod_1)
+```
+
+## ANOVA avec statistiques inférentielles
+
+```{r anova avec inférences, message=FALSE, warning=FALSE}
+
+mod_2 <- lm(Total_video ~ Gender + HDI + Gender * HDI, mooc_selection)
+anova(mod_2)
+summary(mod_2)
+```
+
+# Régression logistique
+
+## Présenter des odds ratios
+
+```{r création df mooc_glm, message=FALSE, warning=FALSE}
+
+mooc_glm <- mooc_filtered %>% select(HDI, Gender, Exam.bin)
+explanatory <- c("HDI", "Gender")
+dependent <- c("Exam.bin")
+```
+
+## Calcul des odds ratio
+
+```{r calcul odds ratio, message=FALSE, warning=FALSE}
+
+glm_test <- glm(Exam.bin ~ HDI + Gender, mooc_glm, family = "binomial")
+questionr::odds.ratio(glm_test)
+```
+
+## Forest plot des odds ratio
+
+```{r forest plot odds ratio, message=FALSE, warning=FALSE}
+
+mooc_glm %>% or_plot(dependent, explanatory)
+```
+
+## Données de comptage, loi de Poisson
+
+```{r distribution total_video, message=FALSE, warning=FALSE}
+
+ggplot(mooc_selection, aes(Total_video)) +
+  geom_histogram(binwidth = 4 ,fill = "steelblue", color = "black") +
+  scale_x_continuous(breaks = seq(0, 30, 5)) +
+  scale_y_continuous(breaks = seq(0, 8000, 1000)) +
+  labs(x = "\nNombre de vidéos visionnées",
+       y = "Compte\n") +
+  theme(axis.text.y = element_text(angle = 45))
+```
+
+```{r loi de Poisson, message=FALSE, warning=FALSE}
+
+mod_3 <- glm(Exam.bin ~ Gender + HDI, mooc_glm, family = "poisson")
+
+plot(mod_3, which = c(1,2))
+
+par(mfrow = c(2, 2))
+plot(mod_3)
+```
